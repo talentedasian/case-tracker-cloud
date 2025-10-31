@@ -1,15 +1,35 @@
 package main
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	todoContext := context.TODO()
+	cfg, err := config.LoadDefaultConfig(todoContext, config.WithRegion("ap-southeast-1"))
+	if err != nil {
+		log.Fatalf("unable to load SDK config, %v", err)
+	}
+
+	// Using the Config value, create the DynamoDB client
+	svc := dynamodb.NewFromConfig(cfg)
+
 	router := gin.Default()
-	router.GET("/inmates", getInmates)
+	router.GET("/inmates", func(c *gin.Context) {
+		getInmates(c, todoContext, svc)
+	})
+	router.POST("/inmates", func(c *gin.Context) {
+		putInmate(c, todoContext, svc)
+	})
 
 	router.Run()
 }
@@ -24,54 +44,30 @@ type Inmate struct {
 	PhoneNumber string    `json:"phone_number"`
 }
 
-var Inmates = []Inmate{
-	{
-		ID:          1001,
-		FirstName:   "John",
-		LastName:    "Doe",
-		MiddleName:  "Michael",
-		UpdatedAt:   time.Now(),
-		CreatedAt:   time.Date(2024, 3, 10, 9, 0, 0, 0, time.UTC),
-		PhoneNumber: "+1-555-1001",
-	},
-	{
-		ID:          1002,
-		FirstName:   "Alice",
-		LastName:    "Johnson",
-		MiddleName:  "Marie",
-		UpdatedAt:   time.Now(),
-		CreatedAt:   time.Date(2024, 5, 21, 10, 15, 0, 0, time.UTC),
-		PhoneNumber: "+1-555-1002",
-	},
-	{
-		ID:          1003,
-		FirstName:   "Robert",
-		LastName:    "Smith",
-		MiddleName:  "James",
-		UpdatedAt:   time.Now(),
-		CreatedAt:   time.Date(2024, 7, 5, 13, 45, 0, 0, time.UTC),
-		PhoneNumber: "+1-555-1003",
-	},
-	{
-		ID:          1004,
-		FirstName:   "Maria",
-		LastName:    "Lopez",
-		MiddleName:  "Isabel",
-		UpdatedAt:   time.Now(),
-		CreatedAt:   time.Date(2024, 8, 18, 11, 30, 0, 0, time.UTC),
-		PhoneNumber: "+1-555-1004",
-	},
-	{
-		ID:          1005,
-		FirstName:   "David",
-		LastName:    "Brown",
-		MiddleName:  "Andrew",
-		UpdatedAt:   time.Now(),
-		CreatedAt:   time.Date(2024, 9, 2, 16, 0, 0, 0, time.UTC),
-		PhoneNumber: "+1-555-1005",
-	},
+func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
+	scanOutput, err := svc.Scan(todoContext, &dynamodb.ScanInput{
+		TableName: aws.String("case_tracker"),
+	})
+	if err != nil {
+		log.Fatalf("failed to scan table, %v", err)
+	}
+
+	c.JSON(http.StatusOK, scanOutput.Items)
 }
 
-func getInmates(c *gin.Context) {
-	c.JSON(http.StatusOK, Inmates)
+func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
+	var inmate Inmate
+	if err := c.BindJSON(&inmate); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	svc.PutItem(todoContext, &dynamodb.PutItemInput{
+		TableName: aws.String("case_tracker"),
+		Item: map[string]types.AttributeValue{
+			"id":               &types.AttributeValueMemberN{Value: string(inmate.ID)},
+			"inmate_last_name": &types.AttributeValueMemberS{Value: inmate.LastName},
+		},
+	})
+
 }
