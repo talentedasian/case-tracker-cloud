@@ -1,4 +1,4 @@
-FROM golang:1.25.2 AS builder
+FROM golang:1.25.2-alpine AS builder
 
 WORKDIR /app
 
@@ -14,5 +14,4 @@ FROM gcr.io/distroless/base-debian11
 
 COPY --from=builder /app/inmate /inmate
 
-# Set entrypoint
 CMD ["/inmate"]

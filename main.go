@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,7 +30,7 @@ func main() {
 	router.GET("/inmates", func(c *gin.Context) {
 		getInmates(c, todoContext, svc)
 	})
-	router.POST("/inmates", func(c *gin.Context) {
+	router.POST("/inmate", func(c *gin.Context) {
 		putInmate(c, todoContext, svc)
 	})
 
@@ -62,12 +65,34 @@ func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client
 		return
 	}
 
-	svc.PutItem(todoContext, &dynamodb.PutItemInput{
-		TableName: aws.String("case_tracker"),
-		Item: map[string]types.AttributeValue{
-			"id":               &types.AttributeValueMemberN{Value: string(inmate.ID)},
-			"inmate_last_name": &types.AttributeValueMemberS{Value: inmate.LastName},
-		},
+	item := map[string]types.AttributeValue{
+		"inmate_id":        &types.AttributeValueMemberN{Value: strconv.FormatUint(inmate.ID, 10)},
+		"inmate_last_name": &types.AttributeValueMemberS{Value: inmate.LastName},
+	}
+
+	slog.Info("Adding inmate", "inmate", item)
+
+	putItemOut, err := svc.PutItem(todoContext, &dynamodb.PutItemInput{
+		TableName:              aws.String("case_tracker"),
+		Item:                   item,
+		ReturnConsumedCapacity: types.ReturnConsumedCapacityTotal,
+		ReturnValues:           types.ReturnValueAllOld,
 	})
 
+	if putItemOut != nil {
+		jsonByteData, jErr := json.Marshal(&putItemOut.Attributes)
+
+		slog.Info("Total consumred write capacity", "write capacity",
+			strconv.FormatFloat(*putItemOut.ConsumedCapacity.CapacityUnits, 'f', 2, 64))
+
+		if jErr != nil {
+			slog.Error("Failed to marshal put item output attributes", "error", jErr.Error())
+		}
+
+		slog.Info("Successfully added inmate", "inmate", string(jsonByteData))
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+	}
 }
