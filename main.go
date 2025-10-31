@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"log/slog"
 	"net/http"
@@ -14,6 +13,33 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gin-gonic/gin"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+var (
+	putInmateRequestsCounter = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "inmate_requests_total",
+			Help: "Total number of inmate API requests",
+		},
+	)
+
+	putInmateErrorCounter = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "put_inmate_error_total",
+			Help: "Total number of put_inmate errors",
+		},
+	)
+
+	putInmateWriteCapacityHistgoram = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "put_inmate_write_capacity",
+			Help: "Measurement of write capacity units consumed during putInmate operations",
+		},
+	)
 )
 
 func main() {
@@ -30,9 +56,12 @@ func main() {
 	router.GET("/inmates", func(c *gin.Context) {
 		getInmates(c, todoContext, svc)
 	})
+
 	router.POST("/inmate", func(c *gin.Context) {
 		putInmate(c, todoContext, svc)
 	})
+
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	router.Run()
 }
@@ -59,6 +88,8 @@ func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Clien
 }
 
 func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
+	putInmateRequestsCounter.Inc()
+
 	var inmate Inmate
 	if err := c.BindJSON(&inmate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -80,19 +111,17 @@ func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client
 	})
 
 	if putItemOut != nil {
-		jsonByteData, jErr := json.Marshal(&putItemOut.Attributes)
-
 		slog.Info("Total consumred write capacity", "write capacity",
 			strconv.FormatFloat(*putItemOut.ConsumedCapacity.CapacityUnits, 'f', 2, 64))
 
-		if jErr != nil {
-			slog.Error("Failed to marshal put item output attributes", "error", jErr.Error())
-		}
+		slog.Info("Successfully added inmate", "inmate_id", inmate.ID)
 
-		slog.Info("Successfully added inmate", "inmate", string(jsonByteData))
+		putInmateWriteCapacityHistgoram.Observe(*putItemOut.ConsumedCapacity.CapacityUnits)
 	}
 
 	if err != nil {
+		putInmateErrorCounter.Inc()
+
 		c.JSON(http.StatusInternalServerError, err.Error())
 	}
 }
