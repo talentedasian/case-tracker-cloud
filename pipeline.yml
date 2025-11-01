@@ -1,0 +1,33 @@
+resources:
+- name: docker-image-registry
+  type: registry-image
+  icon: docker
+  source:
+    repository: asianvietnamese/case_tracker
+    tag: latest
+    username: asianvietnamese
+    password: ((docker-password))
+
+jobs:
+- name: build-and-push
+  plan:
+  - get: concourse-examples
+  - task: build-task-image
+    privileged: true
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: concourse/oci-build-task
+      inputs:
+      - name: concourse-examples
+      outputs:
+      - name: image
+      params:
+        CONTEXT: concourse-examples/Dockerfiles/simple
+      run:
+        path: build
+  - put: simple-image
+    params:
+      image: image/image.tar
