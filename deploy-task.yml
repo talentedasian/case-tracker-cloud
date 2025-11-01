@@ -1,9 +1,8 @@
 ---
 platform: linux
 
-privileged: true
-
 run:
+  privileged: true
   path: sh
   args: 
   - -exc
