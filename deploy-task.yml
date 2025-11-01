@@ -1,12 +1,39 @@
 ---
 platform: linux
 
-run:
-  privileged: true
-  path: sh
-  args: 
-  - -exc
-  - |
-    ~/.deploy.sh
+image_resource:
+  type: registry-image
+  source:
+    repository: docker
+    tag: dind
 
-  
+inputs:
+  - name: docker-image
+
+params:
+  CONTAINER_NAME: case-tracker-backend
+  HOST_PORT: 8080
+  CONTAINER_PORT: 8080
+
+privileged: true
+
+run:
+  path: sh
+  args:
+    - -exc
+    - |
+      # Load the image
+      docker load -i docker-image/image.tar
+      IMAGE_NAME=$(docker images --format "{{.Repository}}:{{.Tag}}" | head -n 1)
+      
+      # Stop and remove old container (ignore errors if doesn't exist)
+      docker rm -f $CONTAINER_NAME || true
+      
+      # Run new container
+      docker run -d \
+        --name $CONTAINER_NAME \
+        --restart unless-stopped \
+        -p ${HOST_PORT}:${CONTAINER_PORT} \
+        $IMAGE_NAME
+      
+      echo "✅ Deployed on port ${HOST_PORT}"
