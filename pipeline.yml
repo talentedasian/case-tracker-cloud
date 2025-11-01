@@ -48,9 +48,8 @@ jobs:
         type: registry-image
         source:
           repository: alpine
-          tag: latest
       inputs:
-        - name: repo
+        - name: project-repository
       params:
         VM_USER: ((vm-user))
         VM_HOST: ((vm-host))
@@ -65,7 +64,7 @@ jobs:
             apk add --no-cache openssh-client
 
             echo "Setting up SSH key"
-            
+
             mkdir -p ~/.ssh
             echo "$VM_PRIVATE_KEY" > ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
