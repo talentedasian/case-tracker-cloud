@@ -1,11 +1,11 @@
----
+# deploy-task.yml (Modified to use host Docker socket)
 platform: linux
 
 image_resource:
   type: registry-image
   source:
-    repository: docker
-    tag: dind
+    repository: docker # Use a standard image with the docker CLI installed
+    tag: latest
 
 inputs:
   - name: docker-image
@@ -35,3 +35,10 @@ run:
         $IMAGE_NAME
       
       echo "✅ Deployed on port ${HOST_PORT}"
+
+# Add this section to mount the host's docker socket
+volume_mounts:
+  - path: /var/run/docker.sock
+    volume:
+      type: host
+      path: /var/run/docker.sock
