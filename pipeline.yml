@@ -40,9 +40,9 @@ jobs:
       image: image/image.tar
 - name: deploy
   plan:
-  - task: deploy-to-vm
+  - get: docker-image-registry
     passed: [build-and-push]
-    trigger: true
+  - task: deploy-to-vm
     privileged: true
     config:
       platform: linux
