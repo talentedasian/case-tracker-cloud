@@ -15,8 +15,6 @@ params:
   HOST_PORT: 8080
   CONTAINER_PORT: 8080
 
-privileged: true
-
 run:
   path: sh
   args:
