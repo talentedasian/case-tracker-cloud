@@ -42,6 +42,7 @@ jobs:
   plan:
   - get: docker-image-registry
     passed: [build-and-push]
+    trigger: true
   - task: deploy-to-vm
     privileged: true
     config:
