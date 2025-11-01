@@ -41,6 +41,7 @@ jobs:
 - name: deploy
   plan:
   - task: deploy-to-vm
+    passed: [build-and-push]
     privileged: true
     config:
       platform: linux
@@ -48,13 +49,10 @@ jobs:
         type: registry-image
         source:
           repository: alpine
-      inputs:
-        - name: project-repository
       params:
         VM_USER: ((vm-user))
         VM_HOST: ((vm-host))
         VM_HOST_SSH_KEY: ((vm-host-ssh-key))
-        IMAGE_NAME: asianvietnamese/case_tracker:backend-latest
       run:
         path: sh
         args:
@@ -66,7 +64,7 @@ jobs:
             echo "Setting up SSH key"
 
             mkdir -p ~/.ssh
-            echo "$VM_PRIVATE_KEY" > ~/.ssh/id_rsa
+            echo "$VM_HOST_SSH_KEY" > ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
 
             ssh -o StrictHostKeyChecking=no $VM_USER@$VM_HOST 'bash ~/deploy.sh'
