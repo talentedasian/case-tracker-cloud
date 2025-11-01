@@ -1,0 +1,15 @@
+---
+platform: linux
+
+run:
+  path: sh
+  args: 
+  - exc
+  - |
+    echo "Removing existing container (if any) and deploying new container..."
+    docker rm -f case_tracker
+
+    echo "Running new container from the latest image..."
+    docker run -d --name case_tracker -p 8080:8080 asianvietnamese/case_tracker:backend-latest
+
+    docker ps
