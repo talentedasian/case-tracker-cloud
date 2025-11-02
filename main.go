@@ -66,10 +66,18 @@ func main() {
 	router.Run()
 }
 
+type Gender uint8
+
+const (
+	Female Gender = 0
+	Male   Gender = 1
+)
+
 type Inmate struct {
 	ID          uint64    `json:"id"`
 	FirstName   string    `json:"first_name"`
 	LastName    string    `json:"last_name"`
+	Gender      Gender    `json:"gender"`
 	MiddleName  string    `json:"middle_name"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -99,6 +107,7 @@ func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client
 	item := map[string]types.AttributeValue{
 		"inmate_id":        &types.AttributeValueMemberN{Value: strconv.FormatUint(inmate.ID, 10)},
 		"inmate_last_name": &types.AttributeValueMemberS{Value: inmate.LastName},
+		"inmate_gender":    &types.AttributeValueMemberS{Value: inmate.LastName},
 	}
 
 	slog.Info("Adding inmate", "inmate", item)
