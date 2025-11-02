@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -75,14 +74,9 @@ const (
 )
 
 type Inmate struct {
-	ID          uint64    `json:"id"`
-	FirstName   string    `json:"first_name"`
-	LastName    string    `json:"last_name"`
-	Gender      Gender    `json:"gender"`
-	MiddleName  string    `json:"middle_name"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CreatedAt   time.Time `json:"created_at"`
-	PhoneNumber string    `json:"phone_number"`
+	ID        uint64 `dynamodbav:"inmate_id" json:"id"`
+	FirstName string `dynamodbav:"first_name" json:"first_name"`
+	Gender    Gender `dynamodbav:"gender" json:"gender"`
 }
 
 func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
@@ -93,7 +87,14 @@ func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Clien
 		log.Fatalf("failed to scan table, %v", err)
 	}
 
-	c.JSON(http.StatusOK, attributevalue.UnmarshalListOfMaps(scanOutput.Items, &[]Inmate{}))
+	var inmates []Inmate
+
+	if err := attributevalue.UnmarshalListOfMaps(scanOutput.Items, &inmates); err != nil {
+		slog.Error("Failed to unmarshal inmates", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unmarshal inmates"})
+	}
+
+	c.JSON(http.StatusOK, inmates)
 }
 
 func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
