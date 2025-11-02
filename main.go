@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gin-gonic/gin"
@@ -92,7 +93,7 @@ func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Clien
 		log.Fatalf("failed to scan table, %v", err)
 	}
 
-	c.JSON(http.StatusOK, scanOutput.Items)
+	c.JSON(http.StatusOK, attributevalue.UnmarshalListOfMaps(scanOutput.Items, &[]Inmate{}))
 }
 
 func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
@@ -104,17 +105,19 @@ func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client
 		return
 	}
 
-	item := map[string]types.AttributeValue{
-		"inmate_id":        &types.AttributeValueMemberN{Value: strconv.FormatUint(inmate.ID, 10)},
-		"inmate_last_name": &types.AttributeValueMemberS{Value: inmate.LastName},
-		"inmate_gender":    &types.AttributeValueMemberS{Value: inmate.LastName},
+	inMateItem, avErr := attributevalue.MarshalMap(inmate)
+
+	if avErr != nil {
+		slog.Error("Failed to marshal inmate", "error", avErr)
+		c.JSON(http.StatusInternalServerError, avErr.Error())
+		return
 	}
 
-	slog.Info("Adding inmate", "inmate", item)
+	slog.Info("Adding inmate", "inmate", inMateItem)
 
 	putItemOut, err := svc.PutItem(todoContext, &dynamodb.PutItemInput{
 		TableName:              aws.String("case_tracker"),
-		Item:                   item,
+		Item:                   inMateItem,
 		ReturnConsumedCapacity: types.ReturnConsumedCapacityTotal,
 		ReturnValues:           types.ReturnValueAllOld,
 	})
