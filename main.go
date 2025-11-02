@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -79,6 +81,12 @@ type Inmate struct {
 	Gender   Gender `dynamodbav:"inmate_gender" json:"gender"`
 }
 
+func NewDecoderOptions() attributevalue.DecoderOptions {
+	return attributevalue.DecoderOptions{
+		UseEncodingUnmarshalers: true,
+	}
+}
+
 func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
 	scanOutput, err := svc.Scan(todoContext, &dynamodb.ScanInput{
 		TableName: aws.String("case_tracker"),
@@ -87,14 +95,32 @@ func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Clien
 		log.Fatalf("failed to scan table, %v", err)
 	}
 
+	opts := func(o *attributevalue.DecoderOptions) {
+		o.UseEncodingUnmarshalers = true
+	}
+
 	var inmates []Inmate
 
-	if err := attributevalue.UnmarshalListOfMaps(scanOutput.Items, &inmates); err != nil {
+	if err := attributevalue.UnmarshalListOfMapsWithOptions(scanOutput.Items, &inmates, opts); err != nil {
 		slog.Error("Failed to unmarshal inmates", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unmarshal inmates"})
+		return
 	}
 
 	c.JSON(http.StatusOK, inmates)
+}
+
+func (g *Gender) UnmarshalText(text []byte) error {
+	s := strings.ToLower(string(text))
+	switch s {
+	case "male", "1":
+		*g = Male
+	case "female", "0":
+		*g = Female
+	default:
+		return fmt.Errorf("invalid gender: %s", text)
+	}
+	return nil
 }
 
 func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
