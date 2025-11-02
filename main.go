@@ -74,9 +74,9 @@ const (
 )
 
 type Inmate struct {
-	ID        uint64 `dynamodbav:"inmate_id" json:"id"`
-	FirstName string `dynamodbav:"first_name" json:"first_name"`
-	Gender    Gender `dynamodbav:"gender" json:"gender"`
+	ID       uint64 `dynamodbav:"inmate_id" json:"id"`
+	LastName string `dynamodbav:"inmate_last_name" json:"last_name"`
+	Gender   Gender `dynamodbav:"inmate_gender" json:"gender"`
 }
 
 func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
