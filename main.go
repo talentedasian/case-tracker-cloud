@@ -11,9 +11,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -50,6 +53,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
+
+	stsSvc := sts.NewFromConfig(cfg)
+	creds := stscreds.NewAssumeRoleProvider(stsSvc, "arn:aws:iam::407464631290:role/dynamodb_read_access")
+
+	cfg.Credentials = aws.NewCredentialsCache(creds)
 
 	// Using the Config value, create the DynamoDB client
 	svc := dynamodb.NewFromConfig(cfg)
