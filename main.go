@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 
 	awsConfig "sample/go-gcp/amazon"
+	"sample/go-gcp/handlers"
+	"sample/go-gcp/inmate"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -51,10 +50,11 @@ func main() {
 	todoContext := awsConfig.Context
 	dynamodb := awsConfig.Dynamo
 
+	inmateSvc := inmate.NewService(todoContext, *dynamodb)
+	inmateHandler := handlers.NewInmate(*inmateSvc)
+
 	router := gin.Default()
-	router.GET("/inmates", func(c *gin.Context) {
-		getInmates(c, todoContext, dynamodb)
-	})
+	router.GET("/inmates", inmateHandler.GetInmates)
 
 	router.POST("/inmate", func(c *gin.Context) {
 		putInmate(c, todoContext, dynamodb)
@@ -65,65 +65,10 @@ func main() {
 	router.Run()
 }
 
-type Gender uint8
-
-const (
-	Female Gender = 0
-	Male   Gender = 1
-)
-
-type Inmate struct {
-	ID       uint64 `dynamodbav:"inmate_id" json:"id"`
-	LastName string `dynamodbav:"inmate_last_name" json:"last_name"`
-	Gender   Gender `dynamodbav:"inmate_gender" json:"gender"`
-}
-
-func NewDecoderOptions() attributevalue.DecoderOptions {
-	return attributevalue.DecoderOptions{
-		UseEncodingUnmarshalers: true,
-	}
-}
-
-func getInmates(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
-	scanOutput, err := svc.Scan(todoContext, &dynamodb.ScanInput{
-		TableName: aws.String("case_tracker"),
-	})
-	if err != nil {
-		log.Fatalf("failed to scan table, %v", err)
-	}
-
-	opts := func(o *attributevalue.DecoderOptions) {
-		o.UseEncodingUnmarshalers = true
-	}
-
-	var inmates []Inmate
-
-	if err := attributevalue.UnmarshalListOfMapsWithOptions(scanOutput.Items, &inmates, opts); err != nil {
-		slog.Error("Failed to unmarshal inmates", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unmarshal inmates"})
-		return
-	}
-
-	c.JSON(http.StatusOK, inmates)
-}
-
-func (g *Gender) UnmarshalText(text []byte) error {
-	s := strings.ToLower(string(text))
-	switch s {
-	case "male", "1":
-		*g = Male
-	case "female", "0":
-		*g = Female
-	default:
-		return fmt.Errorf("invalid gender: %s", text)
-	}
-	return nil
-}
-
 func putInmate(c *gin.Context, todoContext context.Context, svc *dynamodb.Client) {
 	putInmateRequestsCounter.Inc()
 
-	var inmate Inmate
+	var inmate inmate.Inmate
 	if err := c.BindJSON(&inmate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
