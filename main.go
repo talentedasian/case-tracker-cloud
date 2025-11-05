@@ -9,13 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	awsConfig "sample/go-gcp/amazon"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/gin-gonic/gin"
 
@@ -48,24 +47,10 @@ var (
 )
 
 func main() {
-	todoContext := context.TODO()
-	cfg, err := config.LoadDefaultConfig(todoContext, config.WithSharedConfigProfile("user-assume-role"), config.WithRegion("ap-southeast-1"))
-	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
-	}
+	awsConfig.Init()
+	todoContext := awsConfig.Context
+	dynamodb := awsConfig.Dynamo
 
-	stsSvc := sts.NewFromConfig(cfg)
-	identity, identityErr := stsSvc.GetCallerIdentity(todoContext, &sts.GetCallerIdentityInput{})
-
-	if identityErr != nil {
-		log.Fatalf("Unable to retrieve current identity: reason %s", identityErr.Error())
-	}
-
-	slog.Info("Current Identity Access", "identity", *identity.Arn)
-
-	cfg.Credentials = stscreds.NewAssumeRoleProvider(stsSvc, "arn:aws:iam::407464631290:role/dynamodb_read_access")
-
-	dynamodb := dynamodb.NewFromConfig(cfg)
 	router := gin.Default()
 	router.GET("/inmates", func(c *gin.Context) {
 		getInmates(c, todoContext, dynamodb)
