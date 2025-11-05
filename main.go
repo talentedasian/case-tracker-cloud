@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -55,9 +55,28 @@ func main() {
 	}
 
 	stsSvc := sts.NewFromConfig(cfg)
-	creds := stscreds.NewAssumeRoleProvider(stsSvc, "arn:aws:iam::407464631290:role/dynamodb_read_access")
+	roleArn := "arn:aws:iam::407464631290:role/dynamodb_read_access"
+	roleSessionName := "prefix-awsAssumeRole"
+	creds, stsErr := stsSvc.AssumeRole(todoContext, &sts.AssumeRoleInput{
+		RoleArn:         &roleArn,
+		RoleSessionName: &roleSessionName,
+	})
 
-	cfg.Credentials = aws.NewCredentialsCache(creds)
+	if stsErr != nil {
+		log.Fatalf("Error when retrieving temporary credentials from STS: reason = %s", stsErr.Error())
+		panic("AWS assume role not working")
+	}
+
+	cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+		return aws.Credentials{
+			AccessKeyID:     *creds.Credentials.AccessKeyId,
+			SecretAccessKey: *creds.Credentials.SecretAccessKey,
+			SessionToken:    *creds.Credentials.SessionToken,
+			Source:          "AnonymousFunction",
+			CanExpire:       true,
+			Expires:         time.Now().Add(1 * time.Hour),
+		}, stsErr
+	})
 
 	// Using the Config value, create the DynamoDB client
 	svc := dynamodb.NewFromConfig(cfg)
