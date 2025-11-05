@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -49,45 +49,55 @@ var (
 
 func main() {
 	todoContext := context.TODO()
-	cfg, err := config.LoadDefaultConfig(todoContext, config.WithRegion("ap-southeast-1"))
+	cfg, err := config.LoadDefaultConfig(todoContext, config.WithSharedConfigProfile("user-assume-role"), config.WithRegion("ap-southeast-1"))
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
 
 	stsSvc := sts.NewFromConfig(cfg)
-	roleArn := "arn:aws:iam::407464631290:role/dynamodb_read_access"
-	roleSessionName := "prefix-awsAssumeRole"
-	creds, stsErr := stsSvc.AssumeRole(todoContext, &sts.AssumeRoleInput{
-		RoleArn:         &roleArn,
-		RoleSessionName: &roleSessionName,
-	})
+	identity, identityErr := stsSvc.GetCallerIdentity(todoContext, &sts.GetCallerIdentityInput{})
 
-	if stsErr != nil {
-		log.Fatalf("Error when retrieving temporary credentials from STS: reason = %s", stsErr.Error())
-		panic("AWS assume role not working")
+	if identityErr != nil {
+		log.Fatalf("Unable to retrieve current identity: reason %s", identityErr.Error())
 	}
 
-	cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
-		return aws.Credentials{
-			AccessKeyID:     *creds.Credentials.AccessKeyId,
-			SecretAccessKey: *creds.Credentials.SecretAccessKey,
-			SessionToken:    *creds.Credentials.SessionToken,
-			Source:          "AnonymousFunction",
-			CanExpire:       true,
-			Expires:         time.Now().Add(1 * time.Hour),
-		}, stsErr
-	})
+	slog.Info("Current Identity Access", "identity", *identity.Arn)
+	roleArn := "arn:aws:iam::407464631290:role/dynamodb_read_access"
+	// roleSessionName := "prefix-awsAssumeRole"
+	creds := stscreds.NewAssumeRoleProvider(stsSvc, roleArn)
+	// creds, stsErr := stsSvc.AssumeRole(todoContext, &sts.AssumeRoleInput{
+	// 	RoleArn:         &roleArn,
+	// 	RoleSessionName: &roleSessionName,
+	// })
+
+	// if stsErr != nil {
+	// 	log.Fatalf("Error when retrieving temporary credentials from STS: reason = %s", stsErr.Error())
+	// 	panic("AWS assume role not working")
+	// }
+
+	// cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+	// 	return aws.Credentials{
+	// 		AccessKeyID:     *creds.Credentials.AccessKeyId,
+	// 		SecretAccessKey: *creds.Credentials.SecretAccessKey,
+	// 		SessionToken:    *creds.Credentials.SessionToken,
+	// 		Source:          "AnonymousFunction",
+	// 		CanExpire:       true,
+	// 		Expires:         time.Now().Add(1 * time.Hour),
+	// 	}, stsErr
+	// })
+
+	cfg.Credentials = creds
 
 	// Using the Config value, create the DynamoDB client
-	svc := dynamodb.NewFromConfig(cfg)
+	dynamodb := dynamodb.NewFromConfig(cfg)
 
 	router := gin.Default()
 	router.GET("/inmates", func(c *gin.Context) {
-		getInmates(c, todoContext, svc)
+		getInmates(c, todoContext, dynamodb)
 	})
 
 	router.POST("/inmate", func(c *gin.Context) {
-		putInmate(c, todoContext, svc)
+		putInmate(c, todoContext, dynamodb)
 	})
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
