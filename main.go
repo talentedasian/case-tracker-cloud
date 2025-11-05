@@ -62,35 +62,10 @@ func main() {
 	}
 
 	slog.Info("Current Identity Access", "identity", *identity.Arn)
-	roleArn := "arn:aws:iam::407464631290:role/dynamodb_read_access"
-	// roleSessionName := "prefix-awsAssumeRole"
-	creds := stscreds.NewAssumeRoleProvider(stsSvc, roleArn)
-	// creds, stsErr := stsSvc.AssumeRole(todoContext, &sts.AssumeRoleInput{
-	// 	RoleArn:         &roleArn,
-	// 	RoleSessionName: &roleSessionName,
-	// })
 
-	// if stsErr != nil {
-	// 	log.Fatalf("Error when retrieving temporary credentials from STS: reason = %s", stsErr.Error())
-	// 	panic("AWS assume role not working")
-	// }
+	cfg.Credentials = stscreds.NewAssumeRoleProvider(stsSvc, "arn:aws:iam::407464631290:role/dynamodb_read_access")
 
-	// cfg.Credentials = aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
-	// 	return aws.Credentials{
-	// 		AccessKeyID:     *creds.Credentials.AccessKeyId,
-	// 		SecretAccessKey: *creds.Credentials.SecretAccessKey,
-	// 		SessionToken:    *creds.Credentials.SessionToken,
-	// 		Source:          "AnonymousFunction",
-	// 		CanExpire:       true,
-	// 		Expires:         time.Now().Add(1 * time.Hour),
-	// 	}, stsErr
-	// })
-
-	cfg.Credentials = creds
-
-	// Using the Config value, create the DynamoDB client
 	dynamodb := dynamodb.NewFromConfig(cfg)
-
 	router := gin.Default()
 	router.GET("/inmates", func(c *gin.Context) {
 		getInmates(c, todoContext, dynamodb)
