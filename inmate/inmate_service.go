@@ -3,7 +3,6 @@ package inmate
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -68,7 +67,6 @@ func (svc *InmateService) GetInmates() ([]Inmate, error) {
 }
 
 func (svc *InmateService) PutInmate(inmate Inmate) error {
-	inmate.ID = INMATE_ID_PREFIX + string(inmate.ID)
 	inmateItem, avErr := attributevalue.MarshalMap(inmate)
 
 	if avErr != nil {
@@ -104,14 +102,16 @@ func (svc *InmateService) PutInmate(inmate Inmate) error {
 	return nil
 }
 
-func (svc *InmateService) Attempt(id, reason string) error {
+func (svc *InmateService) Attempt(id, reason string, attempts int8) error {
 	attemptId := INMATE_ATTEMPT_ID_PREFIX + id
+	inmateId := INMATE_ID_PREFIX + id
 
 	attempt := InmateAttempt{
-		InmateId: id,
+		InmateId: inmateId,
 		ID:       attemptId,
 		Creation: time.Now().UTC(),
 		Reason:   reason,
+		Attempts: attempts,
 	}
 
 	attemptItem, avErr := attributevalue.MarshalMap(attempt)
@@ -126,7 +126,7 @@ func (svc *InmateService) Attempt(id, reason string) error {
 	})
 
 	if err != nil {
-		slog.Error("failed to put atttempt item", "err", err.Error(), "item", attemptItem)
+		slog.Error("failed to put atttempt item", "err", err.Error(), "item", attempt)
 
 		return errors.New("failed to write to dynamodb item")
 	}
@@ -137,9 +137,14 @@ func (svc *InmateService) Attempt(id, reason string) error {
 func (svc *InmateService) GetAttempts(id string) ([]InmateAttempt, error) {
 	var attempts []InmateAttempt
 
+	inmateId := INMATE_ID_PREFIX + id
 	attemptsQueried, err := svc.dynamodb.Query(svc.context, &dynamodb.QueryInput{
 		TableName:              aws.String("case_tracker"),
-		KeyConditionExpression: createQuery("partition_key = %s and sort_key", id, INMATE_ATTEMPT_ID_PREFIX+id),
+		KeyConditionExpression: aws.String("partition_key = :partitionVal and sort_key = :sortVal"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":partitionVal": &types.AttributeValueMemberS{Value: inmateId},
+			":sortVal":      &types.AttributeValueMemberS{Value: INMATE_ATTEMPT_ID_PREFIX + id},
+		},
 	})
 
 	if err != nil {
@@ -155,8 +160,4 @@ func (svc *InmateService) GetAttempts(id string) ([]InmateAttempt, error) {
 	}
 
 	return attempts, nil
-}
-
-func createQuery(format string, a ...any) *string {
-	return aws.String(fmt.Sprint(format, a))
 }

@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"sample/go-gcp/inmate"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -61,7 +63,7 @@ func (handler *InmateHandler) PutInmate(c *gin.Context) {
 }
 
 func (handler *InmateHandler) Attempt(c *gin.Context) {
-	var body map[string]string
+	var body map[string]any
 
 	if err := c.BindJSON(&body); err != nil {
 		jsonBody := parseRawJson(c.Request.Body)
@@ -71,10 +73,42 @@ func (handler *InmateHandler) Attempt(c *gin.Context) {
 		return
 	}
 
-	if err := handler.inmateService.Attempt(body["id"], body["reason"]); err != nil {
-		slog.Error("failed to save attempt", "err", err.Error())
+	attempts, ok := body["attempts"].(float64)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "field `attempts` passed in not a number"})
+
+		return
 	}
 
+	if err := handler.inmateService.Attempt(fmt.Sprint(body["id"]),
+		fmt.Sprint(body["reason"]), int8(attempts)); err != nil {
+		slog.Error("failed to save attempt", "err", err.Error())
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to save inmate attempt"})
+	}
+
+}
+
+func (handler *InmateHandler) GetInmateAttempts(c *gin.Context) {
+	inmateId := c.Param("inmateId")
+
+	if strings.TrimSpace(inmateId) == "" {
+		slog.Debug("attempt to get inmate attemtes: received an empty inmate id")
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": "inmate id request parameter cannot be empty"})
+
+		return
+	}
+
+	inmates, err := handler.inmateService.GetAttempts(inmateId)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, inmates)
 }
 
 func parseRawJson(body io.ReadCloser) string {

@@ -24,5 +24,9 @@ func main() {
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
+	router.POST("/inmate/attempt", inmateHandler.Attempt)
+
+	router.GET("/inmate/attempts/:inmateId", inmateHandler.GetInmateAttempts)
+
 	router.Run()
 }
