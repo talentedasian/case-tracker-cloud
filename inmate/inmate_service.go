@@ -3,8 +3,10 @@ package inmate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -83,6 +85,13 @@ func (svc *InmateService) PutInmate(inmate Inmate) error {
 		ReturnValues:           types.ReturnValueAllOld,
 	})
 
+	if err != nil {
+		putInmateErrorCounter.Inc()
+		slog.Error("failed to put inmate item", "err", err.Error(), "item", inmateItem)
+
+		return errors.New("failed to write to dynamodb item")
+	}
+
 	if putItemOut != nil {
 		slog.Info("Total consumred write capacity", "write capacity",
 			strconv.FormatFloat(*putItemOut.ConsumedCapacity.CapacityUnits, 'f', 2, 64))
@@ -92,9 +101,32 @@ func (svc *InmateService) PutInmate(inmate Inmate) error {
 		putInmateWriteCapacityHistgoram.Observe(*putItemOut.ConsumedCapacity.CapacityUnits)
 	}
 
+	return nil
+}
+
+func (svc *InmateService) Attempt(id, reason string) error {
+	attemptId := INMATE_ATTEMPT_ID_PREFIX + id
+
+	attempt := InmateAttempt{
+		InmateId: id,
+		ID:       attemptId,
+		Creation: time.Now().UTC(),
+		Reason:   reason,
+	}
+
+	attemptItem, avErr := attributevalue.MarshalMap(attempt)
+
+	if avErr != nil {
+		return NewUnableToParseRequestError()
+	}
+
+	_, err := svc.dynamodb.PutItem(svc.context, &dynamodb.PutItemInput{
+		TableName: aws.String("case_tracker"),
+		Item:      attemptItem,
+	})
+
 	if err != nil {
-		putInmateErrorCounter.Inc()
-		slog.Error("failed to put item", "err", err.Error(), "item", inmateItem)
+		slog.Error("failed to put atttempt item", "err", err.Error(), "item", attemptItem)
 
 		return errors.New("failed to write to dynamodb item")
 	}
@@ -102,8 +134,29 @@ func (svc *InmateService) PutInmate(inmate Inmate) error {
 	return nil
 }
 
-func NewDecoderOptions() attributevalue.DecoderOptions {
-	return attributevalue.DecoderOptions{
-		UseEncodingUnmarshalers: true,
+func (svc *InmateService) GetAttempts(id string) ([]InmateAttempt, error) {
+	var attempts []InmateAttempt
+
+	attemptsQueried, err := svc.dynamodb.Query(svc.context, &dynamodb.QueryInput{
+		TableName:              aws.String("case_tracker"),
+		KeyConditionExpression: createQuery("partition_key = %s and sort_key", id, INMATE_ATTEMPT_ID_PREFIX+id),
+	})
+
+	if err != nil {
+		slog.Error("failed to query table, entity {attempt}", "err", err.Error())
+
+		return attempts, errors.New("querying of inmate attempts failed")
 	}
+
+	if err := attributevalue.UnmarshalListOfMapsWithOptions(attemptsQueried.Items, &attempts); err != nil {
+		slog.Error("Failed to unmarshal inmate attempts", "error", err)
+
+		return attempts, NewUnableToParseResponseError()
+	}
+
+	return attempts, nil
+}
+
+func createQuery(format string, a ...any) *string {
+	return aws.String(fmt.Sprint(format, a))
 }

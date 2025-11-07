@@ -60,6 +60,23 @@ func (handler *InmateHandler) PutInmate(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"inmate": inmate})
 }
 
+func (handler *InmateHandler) Attempt(c *gin.Context) {
+	var body map[string]string
+
+	if err := c.BindJSON(&body); err != nil {
+		jsonBody := parseRawJson(c.Request.Body)
+		slog.Error("failed to parse request body to map", "req", jsonBody, "err", err.Error())
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to bind JSON to expected map object"})
+		return
+	}
+
+	if err := handler.inmateService.Attempt(body["id"], body["reason"]); err != nil {
+		slog.Error("failed to save attempt", "err", err.Error())
+	}
+
+}
+
 func parseRawJson(body io.ReadCloser) string {
 	bodyAsByteArray, err := io.ReadAll(body)
 
