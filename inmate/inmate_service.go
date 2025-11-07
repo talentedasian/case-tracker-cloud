@@ -66,7 +66,7 @@ func (svc *InmateService) GetInmates() ([]Inmate, error) {
 }
 
 func (svc *InmateService) PutInmate(inmate Inmate) error {
-	inmate.ID = ID_PREFIX + string(inmate.ID)
+	inmate.ID = INMATE_ID_PREFIX + string(inmate.ID)
 	inmateItem, avErr := attributevalue.MarshalMap(inmate)
 
 	if avErr != nil {

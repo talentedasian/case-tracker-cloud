@@ -13,7 +13,9 @@ const (
 	Male   Gender = 1
 )
 
-const ID_PREFIX = "i#"
+const INMATE_ID_PREFIX = "i#"
+const INMATE_CONFIRM_ID_PREFIX = "i#ic#"
+const INMATE_ATTEMPT_ID_PREFIX = "i#ia#"
 
 type Inmate struct {
 	ID       string `dynamodbav:"partition_key" json:"id"`
@@ -21,14 +23,24 @@ type Inmate struct {
 	Gender   Gender `dynamodbav:"inmate_gender" json:"gender"`
 }
 
-func (i Inmate) MarshalJSON() ([]byte, error) {
+type InmateWithConfirm struct {
+	Inmate        Inmate
+	InmateConfirm InmateConfirm
+}
+
+type InmateWithAttempt struct {
+	Inmate        Inmate
+	InmateAttempt InmateAttempt
+}
+
+func (i *Inmate) MarshalJSON() ([]byte, error) {
 	type Alias Inmate
 	return json.Marshal(&struct {
 		ID string `json:"id"`
 		Alias
 	}{
-		ID:    ID_PREFIX + i.ID,
-		Alias: (Alias)(i),
+		ID:    INMATE_ID_PREFIX + i.ID,
+		Alias: (Alias)(*i),
 	})
 }
 
