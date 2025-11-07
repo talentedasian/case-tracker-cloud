@@ -14,12 +14,12 @@ resource "aws_dynamodb_table" "case_tracker" {
   billing_mode   = "PROVISIONED"
   read_capacity  = 5
   write_capacity = 5
-  hash_key       = "inmate_id"
+  hash_key       = "partition_key"
   range_key      = "sort_key"
   deletion_protection_enabled = true
 
   attribute {
-    name = "inmate_id"
+    name = "partition_key"
     type = "S"
   }
 
