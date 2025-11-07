@@ -8,8 +8,6 @@ RUN go mod download
 
 COPY . . 
 
-ARG TARGETOS=linux
-
 RUN CGO_ENABLED=0 GOOS=$TARGETOS go build -o inmate
 
 FROM gcr.io/distroless/base-debian11
