@@ -3,10 +3,8 @@ package inmate
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strconv"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -68,6 +66,7 @@ func (svc *InmateService) GetInmates() ([]Inmate, error) {
 }
 
 func (svc *InmateService) PutInmate(inmate Inmate) error {
+	inmate.ID = ID_PREFIX + string(inmate.ID)
 	inmateItem, avErr := attributevalue.MarshalMap(inmate)
 
 	if avErr != nil {
@@ -107,17 +106,4 @@ func NewDecoderOptions() attributevalue.DecoderOptions {
 	return attributevalue.DecoderOptions{
 		UseEncodingUnmarshalers: true,
 	}
-}
-
-func (g *Gender) UnmarshalText(text []byte) error {
-	s := strings.ToLower(string(text))
-	switch s {
-	case "male", "1":
-		*g = Male
-	case "female", "0":
-		*g = Female
-	default:
-		return fmt.Errorf("invalid gender: %s", text)
-	}
-	return nil
 }
