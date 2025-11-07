@@ -2,8 +2,8 @@ package inmate
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"strings"
 
@@ -21,27 +21,30 @@ func NewService(ctx context.Context, dynamodbClient dynamodb.Client) *InmateServ
 	return &InmateService{ctx, dynamodbClient}
 }
 
-func (svc *InmateService) GetInmates() []Inmate {
+func (svc *InmateService) GetInmates() ([]Inmate, error) {
+	var inmates []Inmate
+
 	inmatesScanned, err := svc.dynamodb.Scan(svc.context, &dynamodb.ScanInput{
 		TableName: aws.String("case_tracker"),
 	})
 
 	if err != nil {
-		log.Fatalf("failed to scan table, %v", err)
+		slog.Error("failed to scan table", "err", err.Error())
+
+		return inmates, errors.New("scanning of table failed")
 	}
 
 	opts := func(o *attributevalue.DecoderOptions) {
 		o.UseEncodingUnmarshalers = true
 	}
 
-	var inmates []Inmate
-
 	if err := attributevalue.UnmarshalListOfMapsWithOptions(inmatesScanned.Items, &inmates, opts); err != nil {
 		slog.Error("Failed to unmarshal inmates", "error", err)
-		log.Fatalf("Could not unmarshal scan response")
+
+		return inmates, errors.New("failed to parse dynamodb response")
 	}
 
-	return inmates
+	return inmates, nil
 }
 
 func NewDecoderOptions() attributevalue.DecoderOptions {

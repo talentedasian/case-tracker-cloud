@@ -16,5 +16,11 @@ func NewInmate(inmateService inmate.InmateService) InmateHandler {
 }
 
 func (handler *InmateHandler) GetInmates(c *gin.Context) {
-	c.JSON(http.StatusOK, handler.inmateService.GetInmates())
+	inmates, err := handler.inmateService.GetInmates()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	c.JSON(http.StatusOK, inmates)
 }
